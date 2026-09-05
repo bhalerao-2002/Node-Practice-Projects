@@ -2,6 +2,8 @@ const express = require("express");
 const multer = require("multer");
 const path = require('path')
 
+const { uploadFile } = require("./services/fileService");
+
 const app = express();
 
 app.use(express.json());
@@ -9,15 +11,19 @@ app.use(express.json());
 // const upload = multer({
 //     dest: "uploads/"
 // });
-//Advance:
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/");
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + file.originalname);
-    }
-});
+
+//Intermideate: using memory(RAM)
+const storage = multer.memoryStorage();
+
+//Advance: using DiskStorage
+// const storage = multer.diskStorage({
+//     destination: (req, file, cb) => {
+//         cb(null, "uploads/");
+//     },
+//     filename: (req, file, cb) => {
+//         cb(null, Date.now() + file.originalname);
+//     }
+// });
 
 const upload = multer({
     storage,
@@ -28,11 +34,12 @@ const upload = multer({
         console.log("MIME TYPE:", file.mimetype);
         console.log("ORIGINAL NAME:", file.originalname);
 
+        //Basic user can manipulate file extensions
         const ext = path.extname(file.originalname).toLowerCase();
-        if (ext === ".txt") {
+        if (ext === ".png" || ext === ".jpeg") {
             cb(null, true);
         } else {
-            cb(new Error("Only .txt files are allowed"));
+            cb(new Error("Only PNG and JPEG Images are allowed"));
         }
     }
 });
@@ -50,6 +57,13 @@ app.post("/api/files",
     (req, res, next) => {
         upload.single("file")(req, res, (err) => {
             if (err instanceof multer.MulterError) {
+
+                if (err.code === "LIMIT_FILE_SIZE") {
+                    return res.status(400).json({
+                        msg: "Only files under 1 MB are allowed"
+                    });
+                }
+
                 return res.status(400).json({
                     msg: err.message
                 });
@@ -63,13 +77,30 @@ app.post("/api/files",
 
             next();
         });
-    }, (req, res) => {
-        console.log(req.file);
+    }, async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({
+                    msg: "File is required"
+                });
+            }
 
-        res.json({
-            msg: "File uploaded successfully",
-            file: req.file
-        });
+            await uploadFile(req.file);
+
+            res.status(201).json({
+                msg: "File uploaded successfully",
+                file: req.file.originalname
+            });
+
+        } catch (error) {
+            console.error(error);
+
+            res.status(500).json({
+                message: "Upload failed"
+            })
+        };
+
+
     });
 
 
