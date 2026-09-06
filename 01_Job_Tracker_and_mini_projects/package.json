@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "job-tracker.js",
   "scripts": {
-    "dev": "nodemon index.js"
+    "dev": "nodemon job-tracker.js"
   },
   "keywords": [],
   "author": "",
@@ -11,11 +11,14 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
     "bcrypt": "^6.0.0",
     "express": "^5.2.1",
     "fs": "^0.0.1-security",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.4",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
   }
 }

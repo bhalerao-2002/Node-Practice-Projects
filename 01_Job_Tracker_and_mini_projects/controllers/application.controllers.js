@@ -1,4 +1,4 @@
-// const fs = require('fs');
+const fs = require('fs');
 const mongoose = require("mongoose");
 const Job = require("../models/application.model");
 
@@ -21,27 +21,74 @@ function sendFailure(res, statusCode, data) {
     return res.status(statusCode).json({ "status": false, "Error Msg": data })
 }
 
-exports.getAllApplications = (req, res) => {
-    const { status, sort, page, limit } = req.query;
-    let result = readData();
-    if (status) {
-        result = result.filter((app) => app.status === status);
-    }
+exports.getAllApplications = async (req, res) => {
+    try {
+        const { status, sort = "createdAt", order = "desc", page = 1, limit = 10 } = req.query;
 
-    if (sort === 'date') {
-        result = result.slice().sort((a, b) => (a.appliedDate > b.appliedDate ? 1 : -1))
-    }
-
-    if (page && limit) {
         const pageNumber = Number(page);
         const pageSize = Number(limit);
 
-        const start = (pageNumber - 1) * pageSize;
+        if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+            return sendFailure(res, 400, "Invalid Pagination params")
+        }
 
-        result = result.slice(start, start + pageSize);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+            return sendFailure(res, 400, "Page Limit must be between 1 and 100");
+        }
+
+        //Filter
+
+        const filter = {};
+        if (status) {
+            filter.status = status;
+        }
+
+        //sorting
+        const allwoedSortFields = [
+            "createdAt", "company", "position", "status"
+        ];
+
+        const sortField = allwoedSortFields.includes(sort)
+            ? sort : "createdAt";
+
+        const sortOrder = order === "asc" ? 1 : -1;
+
+        const sortOptions = {
+            [sortField]: sortOrder,
+            _id: -1
+        }
+
+        //offset - limit
+        const skip = (pageNumber - 1) * pageSize;
+
+        //query
+
+        const [applications, total] = await Promise.all([
+            Job.find(filter)
+                .sort(sortOptions)
+                .skip(skip)
+                .limit(pageSize)
+                .lean(),
+
+            Job.countDocuments(filter)
+        ]);
+
+        sendSuccess(res, 200, {
+            applications,
+            pagination: {
+                page: pageNumber,
+                limit: pageSize,
+                total,
+                totalPages: Math.ceil(total / pageSize),
+                hasNextPage: pageNumber < Math.ceil(total / pageSize),
+                hasPrevioutPage: pageNumber > 1
+            }
+        });
+    } catch (err) {
+        console.error(err);
+
+        sendFailure(res, 500, "Failed to fetch applications")
     }
-
-    sendSuccess(res, 200, result);
 }
 
 exports.getApplicationById = async (req, res) => {
@@ -121,21 +168,59 @@ exports.updateApplication = async (req, res) => {
     sendSuccess(res, 200, `Application with id : ${updatedApplication.id} and version : ${updatedApplication.version} is updated successfully`);
 }
 
-exports.deleteApplication = (req, res) => {
-    const applications = readData();
-    const id = Number(req.params.id);
+// exports.deleteApplication = (req, res) => {
+//     const applications = readData();
+//     const id = Number(req.params.id);
 
-    const idx = applications.findIndex((app) => app.id === id);
+//     const idx = applications.findIndex((app) => app.id === id);
 
-    if (idx === -1) {
-        return sendFailure(res, 404, `There is no application with id : ${id}`);
+//     if (idx === -1) {
+//         return sendFailure(res, 404, `There is no application with id : ${id}`);
+//     }
+
+//     applications.splice(idx, 1);
+//     writeData(applications);
+//     sendSuccess(res, 200, `Application with id : ${id} is successfully deleted.`)
+// }
+
+exports.deleteApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return sendFailure(
+                res,
+                400,
+                `Invalid application id: ${id}`
+            );
+        }
+
+        const deletedApplication = await Job.findByIdAndDelete(id);
+
+        if (!deletedApplication) {
+            return sendFailure(
+                res,
+                404,
+                "Application not found"
+            );
+        }
+
+        return sendSuccess(
+            res,
+            200,
+            `Application with id : ${id} is successfully deleted.`
+        );
+
+    } catch (error) {
+        console.error(error);
+
+        return sendFailure(
+            res,
+            500,
+            "Failed to delete application"
+        );
     }
-
-    applications.splice(idx, 1);
-    writeData(applications);
-    sendSuccess(res, 200, `Application with id : ${id} is successfully deleted.`)
-}
-
+};
 
 
 

@@ -1,5 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const swaggerUi = require("swagger-ui-express");
+const { swaggerSpec, validateSwaggerSpec } = require("./swagger.js");
 
 const app = express();
 
@@ -13,6 +15,7 @@ const applicationRouter = require("./routes/application.route.js")
 const userRouter = require("./routes/user.route.js")
 
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 
 app.get('/', (req, res) => {
@@ -30,10 +33,24 @@ app.use((req, res) => {
 })
 
 app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && err.type === "entity.parse.failed") {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid JSON request body. Check commas, quotes, and braces."
+        });
+    }
+
     console.error(err.stack);
     res.status(500).json({ "status": "false", "msg": "Internal Server Error" });
 })
 
-app.listen(5000, () => {
-    console.log("Server is listening on http://localhost:5000/")
-})
+validateSwaggerSpec()
+    .then(() => {
+        app.listen(5000, () => {
+            console.log("Server is listening on http://localhost:5000/")
+        })
+    })
+    .catch((error) => {
+        console.error("Swagger specification validation failed:", error.message);
+        process.exitCode = 1;
+    });
